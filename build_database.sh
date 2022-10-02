@@ -14,4 +14,6 @@
 
 #raxml-ng --check --msa MIDORI2_UNIQ_NUC_GB251_CONCAT.select.align.fasta --model GTR+I+G4
 
-raxml-ng --all --msa MIDORI2_UNIQ_NUC_GB251_CONCAT.select.align.fasta --model GTR+I+G4
+## Here I'm boostrapping, though this won't be practical with the fullsize trees
+
+raxml-ng --all --msa MIDORI2_UNIQ_NUC_GB251_CONCAT.select.align.fasta --model GTR+I+G4 --bs-trees 100
