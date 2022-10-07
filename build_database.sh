@@ -2,11 +2,13 @@
 
 #python3 parse_midori.py
 
-#for GENE in CO1 CytB lrRNA srRNA;do
-#	clustalo --auto --force -i MIDORI2_UNIQ_NUC_GB251_${GENE}_RAW.select.fasta -o MIDORI2_UNIQ_NUC_GB251_${GENE}_RAW.select.align.fasta
-#done
+for GENE in CO1 CytB lrRNA srRNA;do
+	clustalo --auto --force -i MIDORI2_UNIQ_NUC_GB251_${GENE}_RAW.select.fasta -o MIDORI2_UNIQ_NUC_GB251_${GENE}_RAW.select.align.fasta
+done
 
 #python3 concatenate_alignment.py
+
+### at this step split into guide and phylum level trees
 
 #modeltest-ng -i MIDORI2_UNIQ_NUC_GB251_CONCAT.select.align.fasta -d nt -p 8
 
@@ -16,4 +18,4 @@
 
 ## Here I'm boostrapping, though this won't be practical with the fullsize trees
 
-raxml-ng --all --msa MIDORI2_UNIQ_NUC_GB251_CONCAT.select.align.fasta --model GTR+I+G4 --bs-trees 100
+#raxml-ng --all --msa MIDORI2_UNIQ_NUC_GB251_CONCAT.select.align.fasta --model GTR+I+G4 --bs-trees 100
