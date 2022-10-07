@@ -13,35 +13,52 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-genes = ['CO1', 'CytB', 'lrRNA', 'srRNA']
+#genes = ['CO1', 'CytB', 'lrRNA', 'srRNA']
+genes = ['CO1', 'CytB']
 
-## Get taxa from one of the sequence files, also map taxa to full taxonomy
+## Read in taxonomy
 
-genome_taxa = pd.DataFrame()
-
-for record in SeqIO.parse('MIDORI2_UNIQ_NUC_GB251_CO1_RAW.select.align.fasta', 'fasta'):
-    record_genome = str(record.id).split('.')[0]
-    record_taxonomy = str(record.description).split(';')
-    
-    for rank in record_taxonomy:
-        level = rank.split('_')[0]
-        taxonomy = '_'.join(rank.split('_')[1:])
-        genome_taxa.loc[record_genome, level] = taxonomy
+genome_taxa = pd.read_csv('MIDORI2_UNIQ_NUC_GB251_RAW_genome_taxa_select.csv', index_col=0)
         
-## Get sequences from all files
+## Get sequences from all alignmen files
 
-all_seqs = pd.DataFrame(columns = genes, index = genome_taxa.index)
+aligned_seqs = pd.DataFrame(columns = genes, index = genome_taxa.index)
 
 for gene in genes:
     for record in SeqIO.parse('MIDORI2_UNIQ_NUC_GB251_' + gene + '_RAW.select.align.fasta', 'fasta'):
-        record_genome = str(record.id).split('.')[0]
-        all_seqs.loc[record_genome, gene] = str(record.seq)
+        record_genome = str(record.id).split('_')[-1] #clean this up later
+        aligned_seqs.loc[record_genome, gene] = str(record.seq)
         
-## Write out concatenated alignment
+## Write phylum level trees and select phylum reps. Right now arthopoda and
+## chordota have a large number of seqs and probably need to be subdivided.
+## Taking care of this would also take care of entries with no phylum, as we
+## could create a new column in the taxonomy dataframe of what subtree each
+## member should belong to.
         
-with open('MIDORI2_UNIQ_NUC_GB251_CONCAT.select.align.fasta', 'w') as fasta_out:
-    for index, row in all_seqs.iterrows():
+phylum_reps = []
+
+for phylum in genome_taxa.phylum.unique():
+    with open('MIDORI2_UNIQ_NUC_GB251_CONCAT.' + phylum + '.select.align.fasta', 'w') as fasta_out:
+        try:
+            temp = list(genome_taxa[genome_taxa.phylum == phylum].sample(20).index)
+            phylum_reps = phylum_reps + temp
+        except ValueError:
+            temp = list(genome_taxa[genome_taxa.phylum == phylum].index)
+            phylum_reps = phylum_reps + temp
+        for index, row in aligned_seqs.reindex(genome_taxa.loc[genome_taxa['phylum'] == phylum].index).iterrows():
+            seq = row.str.cat()
+            try:
+                record = SeqRecord(Seq(seq), id = index, description = genome_taxa.loc[index, 'class'])
+            except TypeError:
+                record = SeqRecord(Seq(seq), id = index, description = 'no_class')
+                    
+            SeqIO.write(record, fasta_out, 'fasta') 
+
+## Write out phylum reps for guide tree
+        
+with open('MIDORI2_UNIQ_NUC_GB251_CONCAT.guide.select.align.fasta', 'w') as fasta_out:
+    for index, row in aligned_seqs.loc[phylum_reps].iterrows():
         seq = row.str.cat()
-        record = SeqRecord(Seq(seq), id = index, description = '')
-        SeqIO.write(record, fasta_out, 'fasta')
+        record = SeqRecord(Seq(seq), id = index, description = genome_taxa.loc[index, 'phylum'])
+        SeqIO.write(record, fasta_out, 'fasta')        
 

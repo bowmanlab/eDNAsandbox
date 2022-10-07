@@ -8,9 +8,9 @@ done
 
 #python3 concatenate_alignment.py
 
-### at this step split into guide and phylum level trees
+## need python wrapper for trees here to iterate across phyla
 
-#modeltest-ng -i MIDORI2_UNIQ_NUC_GB251_CONCAT.select.align.fasta -d nt -p 8
+#modeltest-ng -i MIDORI2_UNIQ_NUC_GB251_CONCAT.guide.select.align.fasta -d nt -p 8
 
 ## winning model is GTR+I+G4
 
