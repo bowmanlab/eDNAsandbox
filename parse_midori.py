@@ -81,12 +81,11 @@ genome_taxa_select = genome_taxa.reindex(genes_present_select.index)
 ## Some entries don't have phylum.  Going to cause problems later, here we'll
 ## just treat them with a separate analysis.
 
-genome_taxa.loc[genome_taxa['phylum'].isnull(), 'phylum'] = 'no_phylum'
+genome_taxa_select.loc[genome_taxa['phylum'].isnull(), 'phylum'] = 'no_phylum'
             
 for gene in genes_present_select.columns:
     with open('MIDORI2_UNIQ_NUC_GB251_' + gene + '_RAW.select.fasta', 'w') as fasta_out:
         for index, value in genes_present_select.iterrows():
-            phylum = genome_taxa.loc[index, 'phylum']
             print('>' + index + '\n' + value[gene], file = fasta_out)
             
 genome_taxa_select.to_csv('MIDORI2_UNIQ_NUC_GB251_RAW_genome_taxa_select.csv')

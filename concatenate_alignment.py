@@ -13,14 +13,13 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-#genes = ['CO1', 'CytB', 'lrRNA', 'srRNA']
-genes = ['CO1', 'CytB']
+genes = ['CO1', 'CytB', 'lrRNA', 'srRNA']
 
 ## Read in taxonomy
 
 genome_taxa = pd.read_csv('MIDORI2_UNIQ_NUC_GB251_RAW_genome_taxa_select.csv', index_col=0)
         
-## Get sequences from all alignmen files
+## Get sequences from all alignment files
 
 aligned_seqs = pd.DataFrame(columns = genes, index = genome_taxa.index)
 
@@ -35,6 +34,13 @@ for gene in genes:
 ## could create a new column in the taxonomy dataframe of what subtree each
 ## member should belong to.
         
+## Right now only 100 of each phyla being printed to make a faster test version
+## of the database.
+        
+## RAxML needs >= 4 taxa to build a tree.  If you have few than that don't
+## bother, and rely on placement in the guide tree.  This is not currently
+## implemented.
+        
 phylum_reps = []
 
 for phylum in genome_taxa.phylum.unique():
@@ -45,20 +51,31 @@ for phylum in genome_taxa.phylum.unique():
         except ValueError:
             temp = list(genome_taxa[genome_taxa.phylum == phylum].index)
             phylum_reps = phylum_reps + temp
-        for index, row in aligned_seqs.reindex(genome_taxa.loc[genome_taxa['phylum'] == phylum].index).iterrows():
-            seq = row.str.cat()
-            try:
-                record = SeqRecord(Seq(seq), id = index, description = genome_taxa.loc[index, 'class'])
-            except TypeError:
-                record = SeqRecord(Seq(seq), id = index, description = 'no_class')
-                    
-            SeqIO.write(record, fasta_out, 'fasta') 
+            
+        ## Outer try clause is just for producing small select alignments for testing.
+            
+        try:
+            for index, row in aligned_seqs.reindex(genome_taxa.loc[genome_taxa['phylum'] == phylum].index).sample(100).iterrows():
+                seq = row.str.cat()
+                try:
+                    record = SeqRecord(Seq(seq), id = index + '|' + genome_taxa.loc[index, 'class'], description = '')
+                except TypeError:
+                    record = SeqRecord(Seq(seq), id = index + '|no_class', description = '')
+                SeqIO.write(record, fasta_out, 'fasta') 
+        except ValueError:
+            for index, row in aligned_seqs.reindex(genome_taxa.loc[genome_taxa['phylum'] == phylum].index).iterrows():
+                seq = row.str.cat()
+                try:
+                    record = SeqRecord(Seq(seq), id = index + '|' + genome_taxa.loc[index, 'class'], description = '')
+                except TypeError:
+                    record = SeqRecord(Seq(seq), id = index + '|no_class', description = '')                               
+                SeqIO.write(record, fasta_out, 'fasta') 
 
 ## Write out phylum reps for guide tree
         
 with open('MIDORI2_UNIQ_NUC_GB251_CONCAT.guide.select.align.fasta', 'w') as fasta_out:
     for index, row in aligned_seqs.loc[phylum_reps].iterrows():
         seq = row.str.cat()
-        record = SeqRecord(Seq(seq), id = index, description = genome_taxa.loc[index, 'phylum'])
+        record = SeqRecord(Seq(seq), id = index + '|' + genome_taxa.loc[index, 'phylum'], description = '')
         SeqIO.write(record, fasta_out, 'fasta')        
 
