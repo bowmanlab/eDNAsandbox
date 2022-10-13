@@ -180,6 +180,8 @@ for phylum in qphyla.unique():
 #stop_here = []
 #stop_here[1]
 
+## Not done yet: Need to classify ASVs, aggregate the classifications, and
+## combine these data with the count data.
  
 
 

@@ -12,6 +12,7 @@ import pandas as pd
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
+import os
 
 genes = ['CO1', 'CytB', 'lrRNA', 'srRNA']
 
@@ -38,42 +39,56 @@ for gene in genes:
 ## of the database.
         
 ## RAxML needs >= 4 taxa to build a tree.  If you have few than that don't
-## bother, and rely on placement in the guide tree.  This is not currently
-## implemented.
+## bother, and rely on placement in the guide tree.
         
 phylum_reps = []
 
 for phylum in genome_taxa.phylum.unique():
-    with open('MIDORI2_UNIQ_NUC_GB251_CONCAT.' + phylum + '.select.align.fasta', 'w') as fasta_out:
-        try:
-            temp = list(genome_taxa[genome_taxa.phylum == phylum].sample(20).index)
-            phylum_reps = phylum_reps + temp
-        except ValueError:
-            temp = list(genome_taxa[genome_taxa.phylum == phylum].index)
-            phylum_reps = phylum_reps + temp
+    if phylum != 'no_phylum':
+        os.mkdir(phylum)
+        with open(phylum + '/MIDORI2_UNIQ_NUC_GB251_CONCAT.' + phylum + '.select.align.fasta', 'w') as fasta_out:
             
-        ## Outer try clause is just for producing small select alignments for testing.
+            ## Select for guide tree.  If few than 20 reps in that phylum, put all
+            ## on guide tree.
             
-        try:
-            for index, row in aligned_seqs.reindex(genome_taxa.loc[genome_taxa['phylum'] == phylum].index).sample(100).iterrows():
-                seq = row.str.cat()
-                try:
-                    record = SeqRecord(Seq(seq), id = index + '|' + genome_taxa.loc[index, 'class'], description = '')
-                except TypeError:
-                    record = SeqRecord(Seq(seq), id = index + '|no_class', description = '')
-                SeqIO.write(record, fasta_out, 'fasta') 
-        except ValueError:
-            for index, row in aligned_seqs.reindex(genome_taxa.loc[genome_taxa['phylum'] == phylum].index).iterrows():
-                seq = row.str.cat()
-                try:
-                    record = SeqRecord(Seq(seq), id = index + '|' + genome_taxa.loc[index, 'class'], description = '')
-                except TypeError:
-                    record = SeqRecord(Seq(seq), id = index + '|no_class', description = '')                               
-                SeqIO.write(record, fasta_out, 'fasta') 
+            try:
+                temp = list(genome_taxa[genome_taxa.phylum == phylum].sample(20).index)
+                phylum_reps = phylum_reps + temp
+            except ValueError:
+                temp = list(genome_taxa[genome_taxa.phylum == phylum].index)
+                phylum_reps = phylum_reps + temp
+                
+            ## Outer try clause is just for producing small select alignments for testing.
+                
+            try:
+                for index, row in aligned_seqs.reindex(genome_taxa.loc[genome_taxa['phylum'] == phylum].index).sample(100).iterrows():
+                    seq = row.str.cat()
+                    try:
+                        record = SeqRecord(Seq(seq), id = index, description = '')
+                    except TypeError:
+                        record = SeqRecord(Seq(seq), id = index, description = '')
+                    SeqIO.write(record, fasta_out, 'fasta') 
+            except ValueError:
+                for index, row in aligned_seqs.reindex(genome_taxa.loc[genome_taxa['phylum'] == phylum].index).iterrows():
+                    seq = row.str.cat()
+                    try:
+                        record = SeqRecord(Seq(seq), id = index, description = '')
+                    except TypeError:
+                        record = SeqRecord(Seq(seq), id = index, description = '')                               
+                    SeqIO.write(record, fasta_out, 'fasta') 
+                    
+    ## Don't create a reference directory for no_refs, all of these will be used
+    ## on the guide tree.
+                    
+    else:
+        temp = list(genome_taxa[genome_taxa.phylum == phylum].index)
+        phylum_reps = phylum_reps + temp
 
 ## Write out phylum reps for guide tree
+                
+os.mkdir('guide')
         
-with open('MIDORI2_UNIQ_NUC_GB251_CONCAT.guide.select.align.fasta', 'w') as fasta_out:
+with open('guide/MIDORI2_UNIQ_NUC_GB251_CONCAT.guide.select.align.fasta', 'w') as fasta_out:
     for index, row in aligned_seqs.loc[phylum_reps].iterrows():
         seq = row.str.cat()
         record = SeqRecord(Seq(seq), id = index + '|' + genome_taxa.loc[index, 'phylum'], description = '')

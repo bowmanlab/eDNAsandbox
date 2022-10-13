@@ -90,6 +90,4 @@ for gene in genes_present_select.columns:
             
 genome_taxa_select.to_csv('MIDORI2_UNIQ_NUC_GB251_RAW_genome_taxa_select.csv')
 genes_present_select.to_csv('MIDORI2_UNIQ_NUC_GB251_RAW_genes_present_select.csv')
-
-
-## YOU ARE HERE, CHECK CSVS                
+                

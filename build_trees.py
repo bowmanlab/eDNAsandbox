@@ -11,11 +11,11 @@ import numpy as np
 
 genome_taxa = pd.read_csv('MIDORI2_UNIQ_NUC_GB251_RAW_genome_taxa_select.csv', index_col=0)
 
-def run_raxml(prefix, msa):
+def run_raxml(prefix, msa, phlum):
     
     ## Create trees with parsimony and random starts.
     
-    subprocess.run('raxml-ng \
+    subprocess.run('cd ' + phylum + ';raxml-ng \
                 --model GTR+I+G4 \
                 --redo \
                 --search \
@@ -25,14 +25,29 @@ def run_raxml(prefix, msa):
                 --tree pars{9},rand{9} \
                 --threads 36', shell = True, executable = '/bin/bash')
                 
+def run_raxml_light(prefix, msa, phylum):
+    
+    ## Create trees with parsimony and random starts.
+    
+    subprocess.run('cd ' + phylum + ';raxml-ng \
+                --model GTR+I+G4 \
+                --redo \
+                --search \
+                --msa ' + msa + ' \
+                --prefix ' + prefix + ' \
+                --workers 18 \
+                --tree pars{2},rand{2} \
+                --threads 36', shell = True, executable = '/bin/bash')
+                
 for phylum in genome_taxa.phylum.unique():
-    msa = 'MIDORI2_UNIQ_NUC_GB251_CONCAT.' + phylum + '.select.align.fasta'
-    run_raxml('MIDORI2_UNIQ_NUC_GB251_CONCAT.' + phylum + '.select', msa)
+    if phylum != 'no_phylum':
+        msa = 'MIDORI2_UNIQ_NUC_GB251_CONCAT.' + phylum + '.select.align.fasta'
+        run_raxml('MIDORI2_UNIQ_NUC_GB251_CONCAT.' + phylum + '.select', msa, phylum)
     
 ## Guide tree
     
 msa = 'MIDORI2_UNIQ_NUC_GB251_CONCAT.guide.select.align.fasta'
-run_raxml('MIDORI2_UNIQ_NUC_GB251_CONCAT.guide.select', msa)   
+run_raxml_light('MIDORI2_UNIQ_NUC_GB251_CONCAT.guide.select', msa, 'guide')   
 
 ## Write out genome_taxa in the taxonomy format that gappa wants. This needs
 ## to be changed if you get rid of the "|.." trailing values, which you
