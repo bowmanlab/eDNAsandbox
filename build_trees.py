@@ -11,13 +11,13 @@ import numpy as np
 
 genome_taxa = pd.read_csv('MIDORI2_UNIQ_NUC_GB251_RAW_genome_taxa_select.csv', index_col=0)
 
-def run_raxml(prefix, msa, phlum):
+def run_raxml(prefix, msa, subtree):
     
     ## Create trees with parsimony and random starts.
     
-    subprocess.run('cd ' + phylum + ';raxml-ng \
-                --model GTR+I+G4 \
+    subprocess.run('cd ' + subtree + ';raxml-ng \
                 --redo \
+                --model GTR+I+G4 \
                 --search \
                 --msa ' + msa + ' \
                 --prefix ' + prefix + ' \
@@ -25,13 +25,13 @@ def run_raxml(prefix, msa, phlum):
                 --tree pars{9},rand{9} \
                 --threads 36', shell = True, executable = '/bin/bash')
                 
-def run_raxml_light(prefix, msa, phylum):
+def run_raxml_light(prefix, msa, subtree):
     
     ## Create trees with parsimony and random starts.
     
-    subprocess.run('cd ' + phylum + ';raxml-ng \
-                --model GTR+I+G4 \
+    subprocess.run('cd ' + subtree + ';raxml-ng \
                 --redo \
+                --model GTR+I+G4 \
                 --search \
                 --msa ' + msa + ' \
                 --prefix ' + prefix + ' \
@@ -39,10 +39,12 @@ def run_raxml_light(prefix, msa, phylum):
                 --tree pars{2},rand{2} \
                 --threads 36', shell = True, executable = '/bin/bash')
                 
-for phylum in genome_taxa.phylum.unique():
-    if phylum != 'no_phylum':
-        msa = 'MIDORI2_UNIQ_NUC_GB251_CONCAT.' + phylum + '.select.align.fasta'
-        run_raxml('MIDORI2_UNIQ_NUC_GB251_CONCAT.' + phylum + '.select', msa, phylum)
+for subtree in genome_taxa.subtree.unique():
+    msa = 'MIDORI2_UNIQ_NUC_GB251_CONCAT.' + subtree + '.select.align.fasta'
+    if genome_taxa.loc[genome_taxa.subtree == subtree].shape[0] < 400:
+        run_raxml('MIDORI2_UNIQ_NUC_GB251_CONCAT.' + subtree + '.select', msa, subtree)
+    else:
+        run_raxml_light('MIDORI2_UNIQ_NUC_GB251_CONCAT.' + subtree + '.select', msa, subtree)
     
 ## Guide tree
     

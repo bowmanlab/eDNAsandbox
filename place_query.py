@@ -50,7 +50,7 @@ def make_unique(query):
             seq_count[seq] = 1
             seq_names[seq] = [name]
             
-    with open(query + '.unique.fasta', 'w') as fasta_out, open(query + '.unique.count', 'w') as count_out:
+    with open(query + '/' + query + '.unique.fasta', 'w') as fasta_out, open(query + '/' + query + '.unique.count', 'w') as count_out:
         print('rep_name' + ',' + 'abundance', file = count_out)
         for seq in list(seq_names.keys()):
             print('>' + seq_names[seq][0], file = fasta_out)
@@ -80,26 +80,38 @@ def split_alignment(combined_in, query_out, ref_out):
 ## Clustalo is very slow, so it will be important to create a unique sequence
 ## file first.
 
-ref = 'MIDORI2_UNIQ_NUC_GB251_CONCAT.guide.select'
-query = '2111SR_20211107_40_16_40m_900mL_S8_L001.12SV5.exp'
 phylum = 'guide'
+ref = phylum + '/MIDORI2_UNIQ_NUC_GB251_CONCAT.' + phylum + '.select'
+query = '2111SR_20211107_40_16_40m_900mL_S8_L001.12SV5.exp'
+
+## Make a directory for results.
+
+try:
+    os.mkdir(query)
+except FileExistsError:
+    pass
 
 ## Make unique.  If program hangs here you probably didn't denoise your reads
 ## adequately!
 
-seq_count, seq_names, name_seq = make_unique(cwd + query)
+seq_count, seq_names, name_seq = make_unique(query)
+
+## From this point all work takes place in the query subdirectory.
+
+query_path = query + '/' + query
 
 subprocess.run('clustalo --force --auto \
-                -i ' + query + '.unique.fasta \
+                -i ' + query_path + '.unique.fasta \
                 --profile1 ' + ref + '.align.fasta \
-                -o ' + query + '.' + phylum + '.align.fasta', shell = True)
+                -o ' + query_path + '.' + phylum + '.align.fasta', shell = True)
                        
 ## Split alignment. For reasons that aren't clear, clustalo changes the alignment
 ## length by 1. So the new reference alignment is created, but is discarded after
-## use by epa-ng.
+## use by epa-ng.  It may be possible to use epa-ng --split for this, but this
+## works fine for now.
 
-split_alignment(query + '.' + phylum + '.align.fasta',
-                query + '.align.fasta',
+split_alignment(query_path + '.' + phylum + '.align.fasta',
+                query_path + '.align.fasta',
                 'temp_ref.align.fasta')
                        
 ## Place to guide tree and create taxonomy.  This can be parsed for
@@ -109,20 +121,21 @@ split_alignment(query + '.' + phylum + '.align.fasta',
                        
 subprocess.run('epa-ng --redo \
                -t ' + ref + '.raxml.bestTree \
-               -q ' + query + '.align.fasta \
+               -q ' + query_path + '.align.fasta \
                -s temp_ref.align.fasta \
                -m ' + ref + '.raxml.bestModel', shell = True)
 
-subprocess.run('mv epa_result.jplace ' + query + '.' + phylum + '.jplace', shell = True) 
-subprocess.run('mv epa_info.log ' + query + '.' + phylum + '.epa_info.log', shell = True)
+subprocess.run('mv epa_result.jplace ' + query_path + '.' + phylum + '.jplace', shell = True) 
+subprocess.run('mv epa_info.log ' + query_path + '.' + phylum + '.epa_info.log', shell = True)
 os.remove('temp_ref.align.fasta')
 
 
 subprocess.run('gappa examine assign \
                --allow-file-overwriting \
+               --out-dir ' + query + ' \
                --taxon-file ' + taxonomy + ' \
                --file-prefix ' + query + '.' + phylum + '. \
-               --jplace-path ' + query + '.' + phylum + '.jplace \
+               --jplace-path ' + query_path + '.' + phylum + '.jplace \
                --per-query-results', shell = True)
 
 ## Parse taxonomy.  The current solution is kludgy as it iterates across
@@ -130,7 +143,7 @@ subprocess.run('gappa examine assign \
                            
 qphyla = pd.Series()
                            
-with open(query + '.' + phylum + '.per_query.tsv', 'r') as tax_in:
+with open(query_path + '.' + phylum + '.per_query.tsv', 'r') as tax_in:
     for line in tax_in.readlines():
         line = line.strip()
         line = line.split('\t')
@@ -146,8 +159,8 @@ with open(query + '.' + phylum + '.per_query.tsv', 'r') as tax_in:
 ## Split query alignment according to guide tree phyla.
             
 for phylum in qphyla.unique():
-    with open(query + '.' + phylum + '.align.fasta', 'w') as fasta_out:                       
-        for record in SeqIO.parse(query + '.align.fasta', 'fasta'):
+    with open(query_path + '.' + phylum + '.align.fasta', 'w') as fasta_out:                       
+        for record in SeqIO.parse(query_path + '.align.fasta', 'fasta'):
             if qphyla[record.id] == phylum:
                 SeqIO.write(record, fasta_out, 'fasta')   
                 
@@ -155,26 +168,26 @@ for phylum in qphyla.unique():
 ## to realign the reads to each reference alignment.
 
 for phylum in qphyla.unique():                
-    ref = 'MIDORI2_UNIQ_NUC_GB251_CONCAT.' + phylum + '.select'
+    ref = phylum + '/MIDORI2_UNIQ_NUC_GB251_CONCAT.' + phylum + '.select' 
                     
     subprocess.run('clustalo --force --auto \
-                    --profile1 ' + query + '.' + phylum + '.align.fasta \
+                    --profile1 ' + query_path + '.' + phylum + '.align.fasta \
                     --profile2 ' + ref + '.align.fasta \
-                    -o ' + query + '.' + phylum + '.align.fasta.tmp', shell = True)
+                    -o ' + query_path + '.' + phylum + '.align.fasta.tmp', shell = True)
                     
-    split_alignment(query + '.' + phylum + '.align.fasta.tmp',
-                    query + '.align.fasta.tmp',
+    split_alignment(query_path + '.' + phylum + '.align.fasta.tmp',
+                    query_path + '.align.fasta.tmp',
                     ref + '.align.fasta.tmp')
     
     subprocess.run('epa-ng --redo \
                -t ' + ref + '.raxml.bestTree \
-               -q ' + query + '.align.fasta.tmp \
+               -q ' + query_path + '.align.fasta.tmp \
                -s ' + ref + '.align.fasta.tmp \
                -m ' + ref + '.raxml.bestModel', shell = True)
                
     
-    subprocess.run('mv epa_result.jplace ' + query + '.' + phylum + '.jplace', shell = True) 
-    subprocess.run('mv epa_info.log ' + query + '.' + phylum + '.epa_info.log', shell = True)          
+    subprocess.run('mv epa_result.jplace ' + query_path + '.' + phylum + '.jplace', shell = True) 
+    subprocess.run('mv epa_info.log ' + query_path + '.' + phylum + '.epa_info.log', shell = True)          
     subprocess.run('rm *tmp', shell = True)
                     
 #stop_here = []
