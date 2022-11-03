@@ -75,13 +75,31 @@ def split_alignment(combined_in, query_out, ref_out):
                 SeqIO.write(record, ref_fasta_out, 'fasta')
     
 #%% Run program
+                
+## Creat a file mapping every rank in taxonomy to subtree rank.  This 
+## will allow you to look up the appropriate subtree regradless of level of
+## taxonomic ranking.
+                
+#!!! Not currently used
+
+taxonomy_subtree = {}
+
+for name, row in genome_taxa.iterrows():
+    subtreerank = row['subtree_rank']
+    subtree = row[subtreerank]
+    row = list(row)
+    subtreei = row.index(subtree)
+    for taxa in row[subtreei:-1]:
+        taxonomy_subtree[taxa] = subtree
 
 ## Align query to guide alignment. This results in a combined ref + query alignment.
 ## Clustalo is very slow, so it will be important to create a unique sequence
 ## file first.
+                
+#!!! Why aren't you aligning once, to the full alignment?
 
-phylum = 'guide'
-ref = phylum + '/MIDORI2_UNIQ_NUC_GB251_CONCAT.' + phylum + '.select'
+subtree = 'guide'
+ref = subtree + '/MIDORI2_UNIQ_NUC_GB251_CONCAT.' + subtree + '.select'
 query = '2111SR_20211107_40_16_40m_900mL_S8_L001.12SV5.exp'
 
 ## Make a directory for results.
@@ -103,14 +121,14 @@ query_path = query + '/' + query
 subprocess.run('clustalo --force --auto \
                 -i ' + query_path + '.unique.fasta \
                 --profile1 ' + ref + '.align.fasta \
-                -o ' + query_path + '.' + phylum + '.align.fasta', shell = True)
+                -o ' + query_path + '.' + subtree + '.align.fasta', shell = True)
                        
 ## Split alignment. For reasons that aren't clear, clustalo changes the alignment
 ## length by 1. So the new reference alignment is created, but is discarded after
 ## use by epa-ng.  It may be possible to use epa-ng --split for this, but this
 ## works fine for now.
 
-split_alignment(query_path + '.' + phylum + '.align.fasta',
+split_alignment(query_path + '.' + subtree + '.align.fasta',
                 query_path + '.align.fasta',
                 'temp_ref.align.fasta')
                        
@@ -125,8 +143,8 @@ subprocess.run('epa-ng --redo \
                -s temp_ref.align.fasta \
                -m ' + ref + '.raxml.bestModel', shell = True)
 
-subprocess.run('mv epa_result.jplace ' + query_path + '.' + phylum + '.jplace', shell = True) 
-subprocess.run('mv epa_info.log ' + query_path + '.' + phylum + '.epa_info.log', shell = True)
+subprocess.run('mv epa_result.jplace ' + query_path + '.' + subtree + '.jplace', shell = True) 
+subprocess.run('mv epa_info.log ' + query_path + '.' + subtree + '.epa_info.log', shell = True)
 os.remove('temp_ref.align.fasta')
 
 
@@ -134,62 +152,91 @@ subprocess.run('gappa examine assign \
                --allow-file-overwriting \
                --out-dir ' + query + ' \
                --taxon-file ' + taxonomy + ' \
-               --file-prefix ' + query + '.' + phylum + '. \
-               --jplace-path ' + query_path + '.' + phylum + '.jplace \
-               --per-query-results', shell = True)
+               --file-prefix ' + query + '.' + subtree + '. \
+               --jplace-path ' + query_path + '.' + subtree + '.jplace \
+               --per-query-results \
+               --best-hit', shell = True)
 
-## Parse taxonomy.  The current solution is kludgy as it iterates across
-## unneeded lines.
-                           
-qphyla = pd.Series()
-                           
-with open(query_path + '.' + phylum + '.per_query.tsv', 'r') as tax_in:
-    for line in tax_in.readlines():
-        line = line.strip()
-        line = line.split('\t')
-        qread = line[0]
-        qtax = line[5].split(';')
-        try:
-            qphylum = qtax[3]
-            print(qphylum)
-            qphyla[qread] = qphylum
-        except IndexError:
-            continue
+## Parse taxonomy.
+               
+#!!! need to rewrite parse-taxonomy
+        
+def parse_taxonomy(per_query_tsv, subtree_taxonomy):
+    
+    tax_in = pd.read_csv(per_query_tsv, index_col = 0, sep = '\t')
+    for qread, row in tax_in.iterrows():
+        qsubtree = row['taxopath'].split(';')[-1]
+        if qsubtree == "NaN":
+            qsubtree = 'guide'
+        print(qread, qsubtree)
+        subtree_taxonomy.loc[qread, 'taxonomy'] = row['taxopath']
+        subtree_taxonomy.loc[qread, 'subtree'] = qsubtree
+            
+    return(subtree_taxonomy)
+
+subtree_taxonomy = pd.DataFrame(columns = ['taxonomy', 'subtree'])
+subtree_taxonomy = parse_taxonomy(query_path + '.guide.per_query.tsv', subtree_taxonomy)
         
 ## Split query alignment according to guide tree phyla.
             
-for phylum in qphyla.unique():
-    with open(query_path + '.' + phylum + '.align.fasta', 'w') as fasta_out:                       
-        for record in SeqIO.parse(query_path + '.align.fasta', 'fasta'):
-            if qphyla[record.id] == phylum:
-                SeqIO.write(record, fasta_out, 'fasta')   
-                
-## Now do the placement on each phylum tree.  It appears to be necessary
-## to realign the reads to each reference alignment.
-
-for phylum in qphyla.unique():                
-    ref = phylum + '/MIDORI2_UNIQ_NUC_GB251_CONCAT.' + phylum + '.select' 
+for subtree in subtree_taxonomy.subtree.unique():
+    if subtree != 'guide':
+        with open(query_path + '.' + subtree + '.align.fasta', 'w') as fasta_out:                       
+            for record in SeqIO.parse(query_path + '.align.fasta', 'fasta'):
+                if subtree_taxonomy.loc[record.id, 'subtree'] == subtree:
+                    SeqIO.write(record, fasta_out, 'fasta')   
                     
-    subprocess.run('clustalo --force --auto \
-                    --profile1 ' + query_path + '.' + phylum + '.align.fasta \
-                    --profile2 ' + ref + '.align.fasta \
-                    -o ' + query_path + '.' + phylum + '.align.fasta.tmp', shell = True)
+        ## Now do the placement on each phylum tree.  It appears to be necessary
+        ## to realign the reads to each reference alignment.       
                     
-    split_alignment(query_path + '.' + phylum + '.align.fasta.tmp',
-                    query_path + '.align.fasta.tmp',
-                    ref + '.align.fasta.tmp')
-    
-    subprocess.run('epa-ng --redo \
-               -t ' + ref + '.raxml.bestTree \
-               -q ' + query_path + '.align.fasta.tmp \
-               -s ' + ref + '.align.fasta.tmp \
-               -m ' + ref + '.raxml.bestModel', shell = True)
+        ref = subtree + '/MIDORI2_UNIQ_NUC_GB251_CONCAT.' + subtree + '.select' 
+                        
+        subprocess.run('clustalo --force --auto \
+                        --profile1 ' + query_path + '.' + subtree + '.align.fasta \
+                        --profile2 ' + ref + '.align.fasta \
+                        -o ' + query_path + '.' + subtree + '.align.fasta.tmp', shell = True)
+                        
+        split_alignment(query_path + '.' + subtree + '.align.fasta.tmp',
+                        query_path + '.align.fasta.tmp',
+                        ref + '.align.fasta.tmp')
+        
+        subprocess.run('epa-ng --redo \
+                   -t ' + ref + '.raxml.bestTree \
+                   -q ' + query_path + '.align.fasta.tmp \
+                   -s ' + ref + '.align.fasta.tmp \
+                   -m ' + ref + '.raxml.bestModel', shell = True)
+                       
+        subprocess.run('mv epa_result.jplace ' + query_path + '.' + subtree + '.jplace', shell = True) 
+        subprocess.run('mv epa_info.log ' + query_path + '.' + subtree + '.epa_info.log', shell = True)          
+        subprocess.run('rm *tmp', shell = True)
+        
+        subprocess.run('gappa examine assign \
+               --allow-file-overwriting \
+               --out-dir ' + query + ' \
+               --taxon-file ' + taxonomy + ' \
+               --file-prefix ' + query + '.' + subtree + '. \
+               --jplace-path ' + query_path + '.' + subtree + '.jplace \
+               --per-query-results \
+               --best-hit', shell = True)
                
+        subprocess.run('gappa examine edpl \
+               --allow-file-overwriting \
+               --out-dir ' + query + ' \
+               --file-prefix ' + query + '.' + subtree + '. \
+               --jplace-path ' + query_path + '.' + subtree + '.jplace', shell = True)
+               
+        subtree_taxonomy = parse_taxonomy(query_path + '.' + subtree + '.per_query.tsv', subtree_taxonomy)
+
+for key in name_seq.keys():               
+    subtree_taxonomy.loc[key, 'asv'] = name_seq[key] 
+
+subtree_taxonomy = subtree_taxonomy.set_index('asv')      
+               
+for asv in subtree_taxonomy.index():
+    subtree_taxonomy.loc[asv, 'abundance'] = seq_count[asv]
     
-    subprocess.run('mv epa_result.jplace ' + query_path + '.' + phylum + '.jplace', shell = True) 
-    subprocess.run('mv epa_info.log ' + query_path + '.' + phylum + '.epa_info.log', shell = True)          
-    subprocess.run('rm *tmp', shell = True)
-                    
+subtree_taxonomy.to_csv(query_path + '.asv_taxcount.csv')
+                        
 #stop_here = []
 #stop_here[1]
 

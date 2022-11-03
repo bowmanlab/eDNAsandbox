@@ -31,6 +31,25 @@ for gene in genes:
         record_genome = str(record.id).split('_')[-1] #clean this up later
         aligned_seqs.loc[record_genome, gene] = str(record.seq)
         
+## Create concatenated alignment
+        
+aligned_seqs['concat'] = ''
+
+for gene in genes:
+    aligned_seqs['concat'] = aligned_seqs['concat'] +  aligned_seqs[gene]
+    
+## Remove duplicate seqs
+    
+aligned_seqs.drop_duplicates(subset = 'concat', inplace = True)
+
+## Remove any sequences that have an "N" value
+
+aligned_seqs = aligned_seqs[aligned_seqs['concat'].str.contains('N') == False]
+
+## Reindex genome_taxa to match
+
+genome_taxa = genome_taxa.reindex(aligned_seqs.index)
+        
 ## Assign appropriate subtrees
         
 genome_taxa['subtree'] = genome_taxa['phylum']
@@ -119,26 +138,26 @@ for subtree in genome_taxa.subtree.unique():
                 
             try:
                 for index, row in aligned_seqs.reindex(genome_taxa.loc[genome_taxa['subtree'] == subtree].index).sample(9999).iterrows():
-                    seq = row.str.cat()
                     try:
-                        record = SeqRecord(Seq(seq), id = index, description = '')
+                        record = SeqRecord(Seq(row['concat']), id = index, description = '')
                     except TypeError:
-                        record = SeqRecord(Seq(seq), id = index, description = '')
+                        record = SeqRecord(Seq(row['concat']), id = index, description = '')
                     SeqIO.write(record, fasta_out, 'fasta') 
             except ValueError:
                 for index, row in aligned_seqs.reindex(genome_taxa.loc[genome_taxa['subtree'] == subtree].index).iterrows():
-                    seq = row.str.cat()
                     try:
-                        record = SeqRecord(Seq(seq), id = index, description = '')
+                        record = SeqRecord(Seq(row['concat']), id = index, description = '')
                     except TypeError:
-                        record = SeqRecord(Seq(seq), id = index, description = '')                               
+                        record = SeqRecord(Seq(row['concat']), id = index, description = '')                               
                     SeqIO.write(record, fasta_out, 'fasta') 
                     
-    ## If fewer than 4 in the subtree, don't create a tree.
+    ## If fewer than 4 in the subtree, don't create a tree. Replace the subtree
+    ## with "guide" because these will be placed only on guide tree.
                     
     else:
         temp = list(genome_taxa[genome_taxa.subtree == subtree].index)
         subtree_reps = subtree_reps + temp
+        genome_taxa.loc[genome_taxa.subtree == subtree, 'subtree'] = 'guide'
 
 ## Write out phylum reps for guide tree
 
@@ -147,8 +166,7 @@ os.mkdir('guide')
         
 with open('guide/MIDORI2_UNIQ_NUC_GB251_CONCAT.guide.select.align.fasta', 'w') as fasta_out:
     for index, row in aligned_seqs.loc[subtree_reps].iterrows():
-        seq = row.str.cat()
-        record = SeqRecord(Seq(seq), id = index + '|' + genome_taxa.loc[index, 'subtree'], description = '')
+        record = SeqRecord(Seq(row['concat']), id = index, description = '')
         SeqIO.write(record, fasta_out, 'fasta')   
         
 genome_taxa.to_csv('MIDORI2_UNIQ_NUC_GB251_RAW_genome_taxa_select.csv')
